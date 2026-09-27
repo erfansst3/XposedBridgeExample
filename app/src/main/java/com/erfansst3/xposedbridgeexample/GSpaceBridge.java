@@ -24,6 +24,8 @@ public final class GSpaceBridge {
 
     public static native String nativeInspectSandHook();
 
+    public static native String nativeDeepInspectSandHook();
+
     public static native int nativeHookMethod(
             Method origin,
             Method hook,
@@ -52,6 +54,10 @@ public final class GSpaceBridge {
 
     public static String inspectSandHook() {
         return nativeInspectSandHook();
+    }
+
+    public static String deepInspectSandHook() {
+        return nativeDeepInspectSandHook();
     }
 
     /**
