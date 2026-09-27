@@ -10,6 +10,8 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 
+import java.lang.reflect.Method;
+
 public class MainActivity extends Activity {
     static volatile boolean hooked;
     static volatile boolean mark;
@@ -18,7 +20,23 @@ public class MainActivity extends Activity {
         System.loadLibrary("xposed_native_diag");
     }
 
-    public static void markHooked() { hooked = true; mark = true; }
+    public static void markHooked() {
+        hooked = true;
+        mark = true;
+    }
+
+    public static class HookTarget {
+        public static String value() {
+            return "ORIGINAL";
+        }
+    }
+
+    public static class HookReplacement {
+        public static String value() {
+            markHooked();
+            return "HOOKED_BY_GSPACE_SANDHOOK";
+        }
+    }
 
     static String probe(String n, ClassLoader... ls) {
         for (ClassLoader l : ls) {
@@ -32,6 +50,58 @@ public class MainActivity extends Activity {
     }
 
     private static native String nativeDiagnostics();
+
+    private String runSandHookTest() {
+        StringBuilder out = new StringBuilder();
+        out.append("=== LIVE SANDHOOK TEST ===\n");
+
+        try {
+            boolean canGetObject = GSpaceBridge.canGetObject();
+            out.append("SandHook.canGetObject(): ")
+                    .append(canGetObject ? "YES" : "NO").append('\n');
+
+            long hookAddress = GSpaceBridge.resolveGSpace(
+                    "Java_com_swift_sandhook_SandHook_hookMethod");
+            out.append("SandHook.hookMethod address: 0x")
+                    .append(Long.toHexString(hookAddress)).append('\n');
+
+            Method origin = HookTarget.class.getDeclaredMethod("value");
+            Method replacement = HookReplacement.class.getDeclaredMethod("value");
+
+            String before = HookTarget.value();
+            out.append("Before hook: ").append(before).append('\n');
+
+            if (!canGetObject) {
+                out.append("RESULT: NOT RUN (SandHook native state is not initialized)\n");
+                return out.toString();
+            }
+
+            if (hookAddress == 0L) {
+                out.append("RESULT: NOT RUN (hookMethod export not found)\n");
+                return out.toString();
+            }
+
+            int result = GSpaceBridge.hookMethod(origin, replacement, null, 2);
+            out.append("SandHook.hookMethod(mode=REPLACE): ")
+                    .append(result).append('\n');
+
+            String after = HookTarget.value();
+            out.append("After hook: ").append(after).append('\n');
+            out.append("Hook callback flag: ").append(hooked ? "YES" : "NO").append('\n');
+
+            if ("HOOKED_BY_GSPACE_SANDHOOK".equals(after)) {
+                out.append("RESULT: HOOK SUCCESS\n");
+            } else {
+                out.append("RESULT: HOOK DID NOT TAKE EFFECT\n");
+            }
+        } catch (Throwable t) {
+            out.append("RESULT: EXCEPTION\n")
+                    .append(t.getClass().getName())
+                    .append(": ").append(String.valueOf(t.getMessage())).append('\n');
+        }
+
+        return out.toString();
+    }
 
     @Override
     public void onCreate(Bundle b) {
@@ -75,15 +145,43 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(24, 24, 24, 24);
 
-        final String report = s.toString();
+        TextView resultView = new TextView(this);
+        resultView.setTextSize(13);
+        resultView.setTextIsSelectable(true);
+
+        Button test = new Button(this);
+        test.setText("RUN LIVE SANDHOOK TEST");
+        test.setOnClickListener(view -> resultView.setText(runSandHookTest()));
+        root.addView(test, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        Button copyTest = new Button(this);
+        copyTest.setText("COPY TEST RESULT");
+        copyTest.setOnClickListener(view -> {
+            ClipboardManager cm =
+                    (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(ClipData.newPlainText(
+                        "SandHook test",
+                        resultView.getText().toString()));
+                copyTest.setText("COPIED");
+                copyTest.postDelayed(() -> copyTest.setText("COPY TEST RESULT"), 1200);
+            }
+        });
+        root.addView(copyTest, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
 
         Button copy = new Button(this);
         copy.setText("COPY FULL REPORT");
+        final String report = s.toString();
         copy.setOnClickListener(view -> {
             ClipboardManager cm =
                     (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             if (cm != null) {
-                cm.setPrimaryClip(ClipData.newPlainText("XposedBridgeExample report", report));
+                cm.setPrimaryClip(ClipData.newPlainText(
+                        "XposedBridgeExample report", report));
                 copy.setText("COPIED");
                 copy.postDelayed(() -> copy.setText("COPY FULL REPORT"), 1200);
             }
@@ -98,6 +196,10 @@ public class MainActivity extends Activity {
         v.setText(report);
         v.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
         root.addView(v, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        root.addView(resultView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
