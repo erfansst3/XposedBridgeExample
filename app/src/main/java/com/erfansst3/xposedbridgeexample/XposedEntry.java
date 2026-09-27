@@ -9,8 +9,10 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public class XposedEntry implements IXposedHookLoadPackage{
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam p) throws Throwable{
-        if(!p.packageName.equals("com.erfansst3.xposedbridgeexample")) return;
-        XposedBridge.log("XposedBridgeExample: loaded in "+p.packageName);
+        if(!p.packageName.equals("com.erfansst3.xposedbridgeexample"))return;
+        MainActivity.xposedActive=true;
+        MainActivity.xposedVersion=XposedBridge.getXposedVersion();
+        XposedBridge.log("XposedBridgeExample: active");
         XposedHelpers.findAndHookMethod("com.erfansst3.xposedbridgeexample.MainActivity",p.classLoader,"onCreate",Bundle.class,new XC_MethodHook(){
             protected void beforeHookedMethod(MethodHookParam param){
                 MainActivity.hooked=true;
