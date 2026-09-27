@@ -56,11 +56,25 @@ public class MainActivity extends Activity {
         out.append("=== LIVE SANDHOOK TEST ===\n");
 
         try {
-            boolean canGetObject = GSpaceBridge.canGetObject();
-            out.append("SandHook.canGetObject(): ")
-                    .append(canGetObject ? "YES" : "NO").append('\n');
+            long initAddress = GSpaceBridge.resolveGSpace(
+                "Java_com_swift_sandhook_SandHook_initNative");
+        out.append("SandHook.initNative address: 0x")
+                .append(Long.toHexString(initAddress)).append('\n');
 
-            long hookAddress = GSpaceBridge.resolveGSpace(
+        boolean initialized = false;
+        if (initAddress != 0L) {
+            initialized = GSpaceBridge.initializeSandHook();
+            out.append("SandHook.initNative(ANDROID_SDK, false): ")
+                    .append(initialized ? "SUCCESS" : "FAILED").append('\n');
+        } else {
+            out.append("SandHook.initNative: EXPORT NOT FOUND\n");
+        }
+
+        boolean canGetObject = GSpaceBridge.canGetObject();
+        out.append("SandHook.canGetObject(): ")
+                .append(canGetObject ? "YES" : "NO").append('\n');
+
+        long hookAddress = GSpaceBridge.resolveGSpace(
                     "Java_com_swift_sandhook_SandHook_hookMethod");
             out.append("SandHook.hookMethod address: 0x")
                     .append(Long.toHexString(hookAddress)).append('\n');
@@ -71,8 +85,8 @@ public class MainActivity extends Activity {
             String before = HookTarget.value();
             out.append("Before hook: ").append(before).append('\n');
 
-            if (!canGetObject) {
-                out.append("RESULT: NOT RUN (SandHook native state is not initialized)\n");
+            if (!initialized || !canGetObject) {
+                out.append("RESULT: NOT RUN (SandHook initialization did not complete)\n");
                 return out.toString();
             }
 
