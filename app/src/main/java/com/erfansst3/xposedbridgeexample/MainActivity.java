@@ -5,23 +5,17 @@ import android.os.Bundle;
 import android.widget.TextView;
 
 public class MainActivity extends Activity{
-    static boolean hooked;
+    static volatile boolean xposedActive,hooked;
+    static volatile int xposedVersion;
     public void onCreate(Bundle b){
         super.onCreate(b);
         TextView v=new TextView(this);
         v.setTextSize(18);
-        StringBuilder s=new StringBuilder();
-        s.append("XposedBridge: ").append(hasBridge()?"FOUND":"NOT FOUND").append("\n");
-        s.append("Hook: ").append(hooked?"SUCCESS":"NOT EXECUTED").append("\n");
-        s.append("Package: ").append(getPackageName()).append("\n");
-        s.append("Process: ").append(android.os.Process.myPid());
-        if(hasBridge()){
-            try{s.append("\nXposed version: ").append(Class.forName("de.robv.android.xposed.XposedBridge").getMethod("getXposedVersion").invoke(null));}catch(Throwable e){s.append("\nVersion: ERROR");}
-        }
-        v.setText(s.toString());
+        v.setText("Xposed: "+(xposedActive?"ACTIVE":"NOT ACTIVE")+
+                "\nHook: "+(hooked?"SUCCESS":"NOT EXECUTED")+
+                "\nVersion: "+(xposedVersion==0?"UNKNOWN":xposedVersion)+
+                "\nPackage: "+getPackageName()+
+                "\nProcess: "+android.os.Process.myPid());
         setContentView(v);
-    }
-    static boolean hasBridge(){
-        try{Class.forName("de.robv.android.xposed.XposedBridge");return true;}catch(Throwable e){return false;}
     }
 }
