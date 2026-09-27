@@ -219,6 +219,35 @@ static bool getDynamicInfo(
     return true;
 }
 
+static uintptr_t resolveSymbolAny(const std::string& moduleName, const std::string& symbol) {
+    if (moduleName.empty() || symbol.empty()) return 0;
+
+    const ModuleInfo module = findModule(moduleName);
+    if (module.path.empty()) return 0;
+
+    void* handle = dlopen(module.path.c_str(), RTLD_NOW | RTLD_NOLOAD);
+    if (handle) {
+        void* addr = dlsym(handle, symbol.c_str());
+        dlclose(handle);
+        if (addr) return reinterpret_cast<uintptr_t>(addr);
+    }
+
+    const ElfW(Sym)* symtab = nullptr;
+    const char* strtab = nullptr;
+    size_t count = 0;
+    if (!getDynamicInfo(module, &symtab, &strtab, &count)) return 0;
+
+    for (size_t i = 0; i < count; ++i) {
+        const ElfW(Sym)& sym = symtab[i];
+        if (sym.st_name == 0) continue;
+        const char* name = strtab + sym.st_name;
+        if (!name || symbol != name) continue;
+        if (sym.st_shndx == SHN_UNDEF || sym.st_value == 0) return 0;
+        return module.base + static_cast<uintptr_t>(sym.st_value);
+    }
+    return 0;
+}
+
 static std::string moduleSymbols(const std::string& moduleName) {
     const ModuleInfo module = findModule(moduleName);
     std::ostringstream out;
@@ -260,9 +289,6 @@ static std::string moduleSymbols(const std::string& moduleName) {
 
         void* addr = handle ? dlsym(handle, name) : nullptr;
         uintptr_t runtime = reinterpret_cast<uintptr_t>(addr);
-        // Some Android linker namespaces do not expose an already-loaded
-        // symbol through dlsym(). For a defined function symbol, the ELF
-        // runtime address is base + st_value.
         if (!runtime && sym.st_shndx != SHN_UNDEF && sym.st_value != 0)
             runtime = module.base + static_cast<uintptr_t>(sym.st_value);
 
@@ -277,7 +303,7 @@ static std::string moduleSymbols(const std::string& moduleName) {
     out << "[all exported function names — first 300]\n";
     for (size_t i = 0; i < count && exports < 300; ++i) {
         const ElfW(Sym)& sym = symtab[i];
-        const unsigned type = ELF64_ST_TYPE(sym.st_info);
+        const unsigned type = static_cast<unsigned>(sym.st_info & 0x0f);
         if (type != STT_FUNC && type != STT_GNU_IFUNC) continue;
         if (sym.st_name == 0) continue;
 
@@ -293,7 +319,6 @@ static std::string moduleSymbols(const std::string& moduleName) {
     if (handle) dlclose(handle);
     return out.str();
 }
-
 
 static std::string jniExports(const std::string& moduleName) {
     const ModuleInfo module = findModule(moduleName);
@@ -348,46 +373,9 @@ static std::string jniExports(const std::string& moduleName) {
     return out.str();
 }
 
-static uintptr_t resolveSymbol(const std::string& moduleName, const std::string& symbol) {
-    if (moduleName.empty() || symbol.empty()) return 0;
-
-    const ModuleInfo module = findModule(moduleName);
-    if (module.path.empty()) return 0;
-
-    void* handle = dlopen(module.path.c_str(), RTLD_NOW | RTLD_NOLOAD);
-    if (!handle) return 0;
-
-    void* addr = dlsym(handle, symbol.c_str());
-    dlclose(handle);
-    return reinterpret_cast<uintptr_t>(addr);
-}
-
-static pid_t parentPid() {
-    std::string stat = readText("/proc/self/stat", 4096);
-    if (stat.empty()) return -1;
-
-    const size_t close = stat.rfind(')');
-    if (close == std::string::npos || close + 2 >= stat.size()) return -1;
-
-    std::istringstream in(stat.substr(close + 2));
-    char state = 0;
-    long ppid = -1;
-    in >> state >> ppid;
-    return static_cast<pid_t>(ppid);
-}
-
-static std::string cmdlineFor(pid_t pid) {
-    if (pid <= 0) return {};
-    std::string path = "/proc/" + std::to_string(pid) + "/cmdline";
-    std::string raw = readText(path.c_str(), 4096);
-    for (char& c : raw) if (c == '\0') c = ' ';
-    return raw;
-}
-
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_erfansst3_xposedbridgeexample_MainActivity_nativeDiagnostics(
         JNIEnv* env, jclass) {
-
     std::ostringstream out;
     const std::string libs = loadedLibraries();
     const std::string maps = relevantLines("/proc/self/maps");
@@ -439,20 +427,12 @@ Java_com_erfansst3_xposedbridgeexample_MainActivity_nativeDiagnostics(
     out << "\n[libgspace_64.so JNI EXPORTS]\n";
     out << jniExports("libgspace_64.so");
 
-    const pid_t ppid = parentPid();
-    out << "\n[Process]\n";
-    out << "self cmdline: " << (cmdlineFor(getpid()).empty() ? "-" : cmdlineFor(getpid())) << "\n";
-    out << "parent pid: " << ppid << "\n";
-    const std::string parent = cmdlineFor(ppid);
-    out << "relevant parent cmdline: " << (relevant(parent) ? parent : "NONE") << "\n";
-
     return env->NewStringUTF(out.str().c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeReport(
         JNIEnv* env, jclass) {
-
     const std::string result =
             moduleSymbols("libstub.so") +
             "\n" +
@@ -463,7 +443,6 @@ Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeReport(
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeResolve(
         JNIEnv* env, jclass, jstring libraryName, jstring symbolName) {
-
     if (!libraryName || !symbolName) return 0;
 
     const char* lib = env->GetStringUTFChars(libraryName, nullptr);
@@ -474,11 +453,40 @@ Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeResolve(
         return 0;
     }
 
-    const uintptr_t address = resolveSymbol(lib, sym);
+    const uintptr_t address = resolveSymbolAny(lib, sym);
 
     env->ReleaseStringUTFChars(libraryName, lib);
     env->ReleaseStringUTFChars(symbolName, sym);
     return static_cast<jlong>(address);
+}
+
+using SandHookCanGetObjectFn = jboolean (*)(JNIEnv*, jclass);
+using SandHookHookMethodFn = jint (*)(JNIEnv*, jclass, jobject, jobject, jobject, jint);
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeCanGetObject(
+        JNIEnv* env, jclass) {
+    const uintptr_t addr = resolveSymbolAny(
+            "libgspace_64.so",
+            "Java_com_swift_sandhook_SandHook_canGetObject");
+    if (!addr) return JNI_FALSE;
+
+    auto fn = reinterpret_cast<SandHookCanGetObjectFn>(addr);
+    return fn(env, nullptr);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeHookMethod(
+        JNIEnv* env, jclass, jobject origin, jobject hook, jobject backup, jint mode) {
+    if (!origin || !hook) return -2;
+
+    const uintptr_t addr = resolveSymbolAny(
+            "libgspace_64.so",
+            "Java_com_swift_sandhook_SandHook_hookMethod");
+    if (!addr) return -3;
+
+    auto fn = reinterpret_cast<SandHookHookMethodFn>(addr);
+    return fn(env, nullptr, origin, hook, backup, mode);
 }
 
 jint JNI_OnLoad(JavaVM*, void*) {
