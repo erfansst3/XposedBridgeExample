@@ -3,6 +3,8 @@ package com.erfansst3.xposedbridgeexample;
 import android.app.Activity;
 import android.os.Bundle;
 import android.widget.TextView;
+import android.widget.ScrollView;
+import android.widget.LinearLayout;
 
 public class MainActivity extends Activity {
     static volatile boolean hooked;
@@ -61,9 +63,24 @@ public class MainActivity extends Activity {
                     .append(": ").append(t.getMessage()).append('\n');
         }
 
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(24, 24, 24, 24);
+
         TextView v = new TextView(this);
         v.setTextSize(12);
+        v.setTextIsSelectable(true);
         v.setText(s.toString());
-        setContentView(v);
+        v.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        root.addView(v, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        scroll.addView(root);
+        setContentView(scroll);
     }
 }
