@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <utility>
 #include <algorithm>
 #include <cctype>
 
@@ -249,7 +250,7 @@ static std::string moduleSymbols(const std::string& moduleName) {
     out << "[candidate exported functions]\n";
     for (size_t i = 0; i < count && candidates < 300; ++i) {
         const ElfW(Sym)& sym = symtab[i];
-        const unsigned type = ELF64_ST_TYPE(sym.st_info);
+        const unsigned type = static_cast<unsigned>(sym.st_info & 0x0f);
         if (type != STT_FUNC && type != STT_GNU_IFUNC) continue;
         if (sym.st_name == 0) continue;
 
