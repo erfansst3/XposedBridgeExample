@@ -3,4 +3,4 @@ android { namespace 'com.erfansst3.xposedbridgeexample'; compileSdk 35
  defaultConfig { applicationId 'com.erfansst3.xposedbridgeexample'; minSdk 23; targetSdk 35; versionCode 1; versionName '1.0' }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
-dependencies { compileOnly 'de.robv.android.xposed:api:82'; compileOnly 'de.robv.android.xposed:api:82:sources' }
+dependencies { compileOnly 'de.robv.android.xposed:api:82' }
