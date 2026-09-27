@@ -10,12 +10,15 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public class XposedEntry implements IXposedHookLoadPackage{
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam p) throws Throwable{
         if(!p.packageName.equals("com.erfansst3.xposedbridgeexample"))return;
-        MainActivity.xposedActive=true;
-        MainActivity.xposedVersion=XposedBridge.getXposedVersion();
-        XposedBridge.log("XposedBridgeExample: active");
-        XposedHelpers.findAndHookMethod("com.erfansst3.xposedbridgeexample.MainActivity",p.classLoader,"onCreate",Bundle.class,new XC_MethodHook(){
+        try{
+            Class<?> c=Class.forName(p.packageName+".MainActivity",true,p.classLoader);
+            XposedHelpers.callStaticMethod(c,"markHooked");
+            XposedBridge.log("XposedBridgeExample: target class marked");
+        }catch(Throwable t){XposedBridge.log("XposedBridgeExample: mark failed "+t);}
+        XposedHelpers.findAndHookMethod(p.packageName+".MainActivity",p.classLoader,"onCreate",Bundle.class,new XC_MethodHook(){
             protected void beforeHookedMethod(MethodHookParam param){
-                MainActivity.hooked=true;
+                try{XposedHelpers.callStaticMethod(param.thisObject.getClass(),"markHooked");}catch(Throwable ignored){}
+                try{MainActivity.xposedVersion=XposedBridge.getXposedVersion();}catch(Throwable ignored){}
                 XposedBridge.log("XposedBridgeExample: hook SUCCESS");
             }
         });
