@@ -1,6 +1,4 @@
 # XposedBridgeExample
-Legacy Xposed API 82 test module for checking Bridge availability and real hook execution.
+Xposed API 82 test module modeled on the standard legacy Xposed module layout: compile-only API, API sources, manifest module metadata, xposedscope resource and assets/xposed_init.
 
-The API is compile-only; the runtime Xposed implementation must be supplied by the framework.
-
-Build with `gradle assembleDebug`.
+The module performs a real XposedHelpers.findAndHookMethod hook and exposes the result in its test activity.
