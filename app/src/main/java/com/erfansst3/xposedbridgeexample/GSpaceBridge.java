@@ -1,10 +1,9 @@
 package com.erfansst3.xposedbridgeexample;
 
+import java.lang.reflect.Method;
+
 /**
- * Native API discovery/bridge for the GSpace runtime libraries loaded in the guest.
- *
- * resolve() returns an exported symbol address only. Calling an arbitrary native
- * address is intentionally not exposed until its exact ABI/signature is known.
+ * Native API bridge for the SandHook runtime bundled inside GSpace.
  */
 public final class GSpaceBridge {
     static {
@@ -16,6 +15,14 @@ public final class GSpaceBridge {
     public static native String nativeReport();
 
     public static native long nativeResolve(String libraryName, String symbolName);
+
+    public static native boolean nativeCanGetObject();
+
+    public static native int nativeHookMethod(
+            Method origin,
+            Method hook,
+            Method backup,
+            int hookMode);
 
     public static String report() {
         return nativeReport();
@@ -31,5 +38,17 @@ public final class GSpaceBridge {
 
     public static long resolveGSpace(String symbolName) {
         return nativeResolve("libgspace_64.so", symbolName);
+    }
+
+    public static boolean canGetObject() {
+        return nativeCanGetObject();
+    }
+
+    /**
+     * SandHook modes from the bundled SandHook implementation:
+     * AUTO=0, INLINE=1, REPLACE=2.
+     */
+    public static int hookMethod(Method origin, Method hook, Method backup, int mode) {
+        return nativeHookMethod(origin, hook, backup, mode);
     }
 }
