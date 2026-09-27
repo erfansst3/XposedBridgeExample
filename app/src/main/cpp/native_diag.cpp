@@ -463,6 +463,116 @@ Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeResolve(
 using SandHookCanGetObjectFn = jboolean (*)(JNIEnv*, jclass);
 using SandHookHookMethodFn = jint (*)(JNIEnv*, jclass, jobject, jobject, jobject, jint);
 
+
+struct SandHookSymbolProbe {
+    const char* name;
+};
+
+static uintptr_t resolveArtSymbol(const char* name) {
+    return resolveSymbolAny("libart.so", name);
+}
+
+static std::string inspectSandHookRuntime() {
+    std::ostringstream out;
+    out << "=== SANDHOOK RUNTIME INSPECTOR ===\n";
+    out << "Process pointer size: " << sizeof(void*) * 8 << "-bit\n";
+
+    const ModuleInfo gspace = findModule("libgspace_64.so");
+    const ModuleInfo art = findModule("libart.so");
+
+    out << "libgspace_64.so: " << (gspace.path.empty() ? "NOT LOADED" : "LOADED") << "\n";
+    if (!gspace.path.empty()) {
+        out << "GSpace base: 0x" << std::hex << gspace.base << std::dec << "\n";
+    }
+    out << "libart.so: " << (art.path.empty() ? "NOT LOADED" : "LOADED") << "\n";
+
+    static const SandHookSymbolProbe sandhook[] = {
+        {"Java_com_swift_sandhook_SandHook_initNative"},
+        {"Java_com_swift_sandhook_SandHook_hookMethod"},
+        {"Java_com_swift_sandhook_SandHook_canGetObject"},
+        {"Java_com_swift_sandhook_SandHook_initForPendingHook"},
+        {"Java_com_swift_sandhook_SandHook_setHookMode"},
+        {"Java_com_swift_sandhook_SandHook_is64Bit"},
+        {"Java_com_swift_sandhook_SandHook_getObjectNative"},
+        {"Java_com_swift_sandhook_SandHook_disableVMInline"},
+        {"Java_com_swift_sandhook_SandHook_disableDex2oatInline"},
+        {"_ZN8SandHook13CastArtMethod4initEP7_JNIEnv"},
+        {"_ZN8SandHook21CastEntryPointFromJni9calOffsetEP7_JNIEnvPN3art6mirror9ArtMethodE"}
+    };
+
+    out << "\n[SandHook exports]\n";
+    for (const auto& item : sandhook) {
+        const uintptr_t addr = resolveSymbolAny("libgspace_64.so", item.name);
+        out << item.name << ": ";
+        if (addr) {
+            out << "YES @ 0x" << std::hex << addr << std::dec;
+            if (!gspace.path.empty() && addr >= gspace.base) {
+                out << " (offset=0x" << std::hex << (addr - gspace.base) << std::dec << ")";
+            }
+        } else {
+            out << "NO";
+        }
+        out << "\n";
+    }
+
+    const uintptr_t weakOld = resolveArtSymbol(
+            "_ZN3art9JavaVMExt22AddWeakGlobalReferenceEPNS_6ThreadEPNS_6mirror6ObjectE");
+    const uintptr_t weakNew = resolveArtSymbol(
+            "_ZN3art9JavaVMExt16AddWeakGlobalRefEPNS_6ThreadEPNS_6mirror6ObjectE");
+    const uintptr_t weakQ = resolveArtSymbol(
+            "_ZN3art9JavaVMExt16AddWeakGlobalRefEPNS_6ThreadENS_6ObjPtrINS_6mirror6ObjectEEE");
+
+    out << "\n[ART weak-global-ref candidates]\n";
+    out << "AddWeakGlobalReference: 0x" << std::hex << weakOld << std::dec << "\n";
+    out << "AddWeakGlobalRef(old): 0x" << std::hex << weakNew << std::dec << "\n";
+    out << "AddWeakGlobalRef(Q+): 0x" << std::hex << weakQ << std::dec << "\n";
+
+    const uintptr_t canGetAddress = resolveSymbolAny(
+            "libgspace_64.so",
+            "Java_com_swift_sandhook_SandHook_canGetObject");
+    out << "\n[Native state]\n";
+    if (canGetAddress) {
+        JNIEnv* env = nullptr;
+        // The JNI function only reads SandHook's native state via canGetObject().
+        // Obtain the current JNIEnv through the VM without touching SandHook init.
+        JavaVM* vm = nullptr;
+        if (JNI_GetCreatedJavaVMs(&vm, 1, nullptr) == JNI_OK && vm) {
+            if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+                env = nullptr;
+            }
+        }
+        if (env) {
+            auto fn = reinterpret_cast<SandHookCanGetObjectFn>(canGetAddress);
+            const jboolean ready = fn(env, nullptr);
+            out << "SandHook.canGetObject(): " << (ready ? "YES" : "NO") << "\n";
+        } else {
+            out << "SandHook.canGetObject(): JNI ENV UNAVAILABLE\n";
+        }
+    } else {
+        out << "SandHook.canGetObject(): EXPORT MISSING\n";
+    }
+
+    out << "\n[Interpretation]\n";
+    if (canGetAddress) {
+        out << "canGetObject is exported, so the function is present.\n";
+    }
+    if (weakOld || weakNew || weakQ) {
+        out << "ART weak-global-ref API is present in libart.\n";
+    } else {
+        out << "No known ART weak-global-ref symbol resolved.\n";
+    }
+    out << "No initialization function is called by this inspector.\n";
+    return out.str();
+}
+
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeInspectSandHook(
+        JNIEnv* env, jclass) {
+    const std::string result = inspectSandHookRuntime();
+    return env->NewStringUTF(result.c_str());
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeCanGetObject(
         JNIEnv* env, jclass) {
