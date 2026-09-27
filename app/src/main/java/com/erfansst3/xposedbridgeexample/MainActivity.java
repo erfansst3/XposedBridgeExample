@@ -53,65 +53,62 @@ public class MainActivity extends Activity {
 
     private String runSandHookTest() {
         StringBuilder out = new StringBuilder();
-        out.append("=== LIVE SANDHOOK TEST ===\n");
+        out.append("=== EXISTING GSPACE SANDHOOK STATE ===\\n");
 
         try {
-            long initAddress = GSpaceBridge.resolveGSpace(
-                "Java_com_swift_sandhook_SandHook_initNative");
-        out.append("SandHook.initNative address: 0x")
-                .append(Long.toHexString(initAddress)).append('\n');
-
-        boolean initialized = false;
-        if (initAddress != 0L) {
-            initialized = GSpaceBridge.initializeSandHook();
-            out.append("SandHook.initNative(ANDROID_SDK, false): ")
-                    .append(initialized ? "SUCCESS" : "FAILED").append('\n');
-        } else {
-            out.append("SandHook.initNative: EXPORT NOT FOUND\n");
-        }
-
-        boolean canGetObject = GSpaceBridge.canGetObject();
-        out.append("SandHook.canGetObject(): ")
-                .append(canGetObject ? "YES" : "NO").append('\n');
-
-        long hookAddress = GSpaceBridge.resolveGSpace(
+            long canGetAddress = GSpaceBridge.resolveGSpace(
+                    "Java_com_swift_sandhook_SandHook_canGetObject");
+            long hookAddress = GSpaceBridge.resolveGSpace(
                     "Java_com_swift_sandhook_SandHook_hookMethod");
-            out.append("SandHook.hookMethod address: 0x")
-                    .append(Long.toHexString(hookAddress)).append('\n');
+            long initAddress = GSpaceBridge.resolveGSpace(
+                    "Java_com_swift_sandhook_SandHook_initNative");
+
+            out.append("libgspace_64.so SandHook.canGetObject: 0x")
+                    .append(Long.toHexString(canGetAddress)).append('\\n');
+            out.append("libgspace_64.so SandHook.hookMethod: 0x")
+                    .append(Long.toHexString(hookAddress)).append('\\n');
+            out.append("libgspace_64.so SandHook.initNative: 0x")
+                    .append(Long.toHexString(initAddress)).append('\\n');
+            out.append("IMPORTANT: initNative is NOT called.\\n");
+
+            boolean canGetObject = GSpaceBridge.canGetObject();
+            out.append("Existing native state canGetObject(): ")
+                    .append(canGetObject ? "YES" : "NO").append('\\n');
 
             Method origin = HookTarget.class.getDeclaredMethod("value");
             Method replacement = HookReplacement.class.getDeclaredMethod("value");
 
             String before = HookTarget.value();
-            out.append("Before hook: ").append(before).append('\n');
+            out.append("Before hook: ").append(before).append('\\n');
 
-            if (!initialized || !canGetObject) {
-                out.append("RESULT: NOT RUN (SandHook initialization did not complete)\n");
+            if (!canGetObject) {
+                out.append("RESULT: NOT RUN — existing SandHook native state is not ready.\\n");
+                out.append("This test deliberately avoids re-initializing GSpace SandHook.\\n");
                 return out.toString();
             }
 
             if (hookAddress == 0L) {
-                out.append("RESULT: NOT RUN (hookMethod export not found)\n");
+                out.append("RESULT: NOT RUN — hookMethod export not found.\\n");
                 return out.toString();
             }
 
             int result = GSpaceBridge.hookMethod(origin, replacement, null, 2);
             out.append("SandHook.hookMethod(mode=REPLACE): ")
-                    .append(result).append('\n');
+                    .append(result).append('\\n');
 
             String after = HookTarget.value();
-            out.append("After hook: ").append(after).append('\n');
-            out.append("Hook callback flag: ").append(hooked ? "YES" : "NO").append('\n');
+            out.append("After hook: ").append(after).append('\\n');
+            out.append("Hook callback flag: ").append(hooked ? "YES" : "NO").append('\\n');
 
             if ("HOOKED_BY_GSPACE_SANDHOOK".equals(after)) {
-                out.append("RESULT: HOOK SUCCESS\n");
+                out.append("RESULT: HOOK SUCCESS\\n");
             } else {
-                out.append("RESULT: HOOK DID NOT TAKE EFFECT\n");
+                out.append("RESULT: HOOK DID NOT TAKE EFFECT\\n");
             }
         } catch (Throwable t) {
-            out.append("RESULT: EXCEPTION\n")
+            out.append("RESULT: EXCEPTION\\n")
                     .append(t.getClass().getName())
-                    .append(": ").append(String.valueOf(t.getMessage())).append('\n');
+                    .append(": ").append(String.valueOf(t.getMessage())).append('\\n');
         }
 
         return out.toString();
