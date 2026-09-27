@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
 
     private String runSandHookTest() {
         StringBuilder out = new StringBuilder();
-        out.append("=== EXISTING GSPACE SANDHOOK STATE ===\\n");
+        out.append("=== EXISTING GSPACE SANDHOOK STATE ===\n");
 
         try {
             long canGetAddress = GSpaceBridge.resolveGSpace(
@@ -64,51 +64,51 @@ public class MainActivity extends Activity {
                     "Java_com_swift_sandhook_SandHook_initNative");
 
             out.append("libgspace_64.so SandHook.canGetObject: 0x")
-                    .append(Long.toHexString(canGetAddress)).append('\\n');
+                    .append(Long.toHexString(canGetAddress)).append('\n');
             out.append("libgspace_64.so SandHook.hookMethod: 0x")
-                    .append(Long.toHexString(hookAddress)).append('\\n');
+                    .append(Long.toHexString(hookAddress)).append('\n');
             out.append("libgspace_64.so SandHook.initNative: 0x")
-                    .append(Long.toHexString(initAddress)).append('\\n');
-            out.append("IMPORTANT: initNative is NOT called.\\n");
+                    .append(Long.toHexString(initAddress)).append('\n');
+            out.append("IMPORTANT: initNative is NOT called.\n");
 
             boolean canGetObject = GSpaceBridge.canGetObject();
             out.append("Existing native state canGetObject(): ")
-                    .append(canGetObject ? "YES" : "NO").append('\\n');
+                    .append(canGetObject ? "YES" : "NO").append('\n');
 
             Method origin = HookTarget.class.getDeclaredMethod("value");
             Method replacement = HookReplacement.class.getDeclaredMethod("value");
 
             String before = HookTarget.value();
-            out.append("Before hook: ").append(before).append('\\n');
+            out.append("Before hook: ").append(before).append('\n');
 
             if (!canGetObject) {
-                out.append("RESULT: NOT RUN — existing SandHook native state is not ready.\\n");
-                out.append("This test deliberately avoids re-initializing GSpace SandHook.\\n");
+                out.append("RESULT: NOT RUN — existing SandHook native state is not ready.\n");
+                out.append("This test deliberately avoids re-initializing GSpace SandHook.\n");
                 return out.toString();
             }
 
             if (hookAddress == 0L) {
-                out.append("RESULT: NOT RUN — hookMethod export not found.\\n");
+                out.append("RESULT: NOT RUN — hookMethod export not found.\n");
                 return out.toString();
             }
 
             int result = GSpaceBridge.hookMethod(origin, replacement, null, 2);
             out.append("SandHook.hookMethod(mode=REPLACE): ")
-                    .append(result).append('\\n');
+                    .append(result).append('\n');
 
             String after = HookTarget.value();
-            out.append("After hook: ").append(after).append('\\n');
-            out.append("Hook callback flag: ").append(hooked ? "YES" : "NO").append('\\n');
+            out.append("After hook: ").append(after).append('\n');
+            out.append("Hook callback flag: ").append(hooked ? "YES" : "NO").append('\n');
 
             if ("HOOKED_BY_GSPACE_SANDHOOK".equals(after)) {
-                out.append("RESULT: HOOK SUCCESS\\n");
+                out.append("RESULT: HOOK SUCCESS\n");
             } else {
-                out.append("RESULT: HOOK DID NOT TAKE EFFECT\\n");
+                out.append("RESULT: HOOK DID NOT TAKE EFFECT\n");
             }
         } catch (Throwable t) {
-            out.append("RESULT: EXCEPTION\\n")
+            out.append("RESULT: EXCEPTION\n")
                     .append(t.getClass().getName())
-                    .append(": ").append(String.valueOf(t.getMessage())).append('\\n');
+                    .append(": ").append(String.valueOf(t.getMessage())).append('\n');
         }
 
         return out.toString();
