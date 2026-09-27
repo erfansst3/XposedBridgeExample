@@ -462,6 +462,19 @@ Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeResolve(
 
 using SandHookCanGetObjectFn = jboolean (*)(JNIEnv*, jclass);
 using SandHookHookMethodFn = jint (*)(JNIEnv*, jclass, jobject, jobject, jobject, jint);
+using SandHookInitNativeFn = jboolean (*)(JNIEnv*, jclass, jint, jboolean);
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeInitSandHook(
+        JNIEnv* env, jclass, jint sdkInt, jboolean debug) {
+    const uintptr_t addr = resolveSymbolAny(
+            "libgspace_64.so",
+            "Java_com_swift_sandhook_SandHook_initNative");
+    if (!addr) return JNI_FALSE;
+
+    auto fn = reinterpret_cast<SandHookInitNativeFn>(addr);
+    return fn(env, nullptr, sdkInt, debug);
+}
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeCanGetObject(
