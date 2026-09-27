@@ -8,7 +8,7 @@ public class MainActivity extends Activity{
     static volatile boolean hooked;
     static volatile int xposedVersion;
     static volatile boolean mark;
-    public static void markHooked(){hooked=true;mark=true;}
+    public static void markHooked(){hooked=true;mark=true;}\n    public static void setVersion(int v){xposedVersion=v;}
     static String probe(String n,ClassLoader l){
         try{Class.forName(n,false,l);return "YES";}catch(Throwable e){return "NO";}
     }
