@@ -1,11 +1,10 @@
 package com.erfansst3.xposedbridgeexample;
 
 /**
- * Small native bridge into the GSpace shared object already loaded in this process.
+ * Native API discovery/bridge for the GSpace runtime libraries loaded in the guest.
  *
- * resolve() only resolves an exported symbol address. It intentionally does not call
- * an unknown function: the exact ABI/signature must be known before a safe wrapper
- * can be implemented.
+ * resolve() returns an exported symbol address only. Calling an arbitrary native
+ * address is intentionally not exposed until its exact ABI/signature is known.
  */
 public final class GSpaceBridge {
     static {
@@ -16,13 +15,21 @@ public final class GSpaceBridge {
 
     public static native String nativeReport();
 
-    public static native long nativeResolve(String exportedSymbol);
+    public static native long nativeResolve(String libraryName, String symbolName);
 
     public static String report() {
         return nativeReport();
     }
 
-    public static long resolve(String exportedSymbol) {
-        return nativeResolve(exportedSymbol);
+    public static long resolve(String libraryName, String symbolName) {
+        return nativeResolve(libraryName, symbolName);
+    }
+
+    public static long resolveStub(String symbolName) {
+        return nativeResolve("libstub.so", symbolName);
+    }
+
+    public static long resolveGSpace(String symbolName) {
+        return nativeResolve("libgspace_64.so", symbolName);
     }
 }
