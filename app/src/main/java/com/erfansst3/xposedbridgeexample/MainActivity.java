@@ -5,6 +5,10 @@ import android.os.Bundle;
 import android.widget.TextView;
 import android.widget.ScrollView;
 import android.widget.LinearLayout;
+import android.widget.Button;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 
 public class MainActivity extends Activity {
     static volatile boolean hooked;
@@ -71,10 +75,27 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(24, 24, 24, 24);
 
+        final String report = s.toString();
+
+        Button copy = new Button(this);
+        copy.setText("COPY FULL REPORT");
+        copy.setOnClickListener(view -> {
+            ClipboardManager cm =
+                    (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(ClipData.newPlainText("XposedBridgeExample report", report));
+                copy.setText("COPIED");
+                copy.postDelayed(() -> copy.setText("COPY FULL REPORT"), 1200);
+            }
+        });
+        root.addView(copy, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
         TextView v = new TextView(this);
         v.setTextSize(12);
         v.setTextIsSelectable(true);
-        v.setText(s.toString());
+        v.setText(report);
         v.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
         root.addView(v, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
