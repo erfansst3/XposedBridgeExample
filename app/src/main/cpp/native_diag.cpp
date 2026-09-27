@@ -472,7 +472,7 @@ static uintptr_t resolveArtSymbol(const char* name) {
     return resolveSymbolAny("libart.so", name);
 }
 
-static std::string inspectSandHookRuntime() {
+static std::string inspectSandHookRuntime(JNIEnv* env) {
     std::ostringstream out;
     out << "=== SANDHOOK RUNTIME INSPECTOR ===\n";
     out << "Process pointer size: " << sizeof(void*) * 8 << "-bit\n";
@@ -532,16 +532,9 @@ static std::string inspectSandHookRuntime() {
             "Java_com_swift_sandhook_SandHook_canGetObject");
     out << "\n[Native state]\n";
     if (canGetAddress) {
-        JNIEnv* env = nullptr;
-        // The JNI function only reads SandHook's native state via canGetObject().
-        // Obtain the current JNIEnv through the VM without touching SandHook init.
-        JavaVM* vm = nullptr;
-        if (JNI_GetCreatedJavaVMs(&vm, 1, nullptr) == JNI_OK && vm) {
-            if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
-                env = nullptr;
-            }
-        }
         if (env) {
+            // The JNI function only reads SandHook's native state via canGetObject().
+            // Use the JNIEnv supplied by Android; do not call or initialize SandHook here.
             auto fn = reinterpret_cast<SandHookCanGetObjectFn>(canGetAddress);
             const jboolean ready = fn(env, nullptr);
             out << "SandHook.canGetObject(): " << (ready ? "YES" : "NO") << "\n";
@@ -569,7 +562,7 @@ static std::string inspectSandHookRuntime() {
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeInspectSandHook(
         JNIEnv* env, jclass) {
-    const std::string result = inspectSandHookRuntime();
+    const std::string result = inspectSandHookRuntime(env);
     return env->NewStringUTF(result.c_str());
 }
 
