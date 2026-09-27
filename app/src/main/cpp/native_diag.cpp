@@ -10,6 +10,7 @@
 #include <utility>
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 
 static std::string lowerCopy(const std::string& s) {
     std::string x = s;
@@ -258,9 +259,16 @@ static std::string moduleSymbols(const std::string& moduleName) {
         if (!name || !*name || !candidateSymbol(name)) continue;
 
         void* addr = handle ? dlsym(handle, name) : nullptr;
+        uintptr_t runtime = reinterpret_cast<uintptr_t>(addr);
+        // Some Android linker namespaces do not expose an already-loaded
+        // symbol through dlsym(). For a defined function symbol, the ELF
+        // runtime address is base + st_value.
+        if (!runtime && sym.st_shndx != SHN_UNDEF && sym.st_value != 0)
+            runtime = module.base + static_cast<uintptr_t>(sym.st_value);
+
         out << name
             << " | value=0x" << std::hex << static_cast<uintptr_t>(sym.st_value)
-            << " | addr=0x" << reinterpret_cast<uintptr_t>(addr)
+            << " | addr=0x" << runtime
             << std::dec << "\n";
         ++candidates;
     }
@@ -283,6 +291,60 @@ static std::string moduleSymbols(const std::string& moduleName) {
     else if (exports >= 300) out << "(limited to 300)\n";
 
     if (handle) dlclose(handle);
+    return out.str();
+}
+
+
+static std::string jniExports(const std::string& moduleName) {
+    const ModuleInfo module = findModule(moduleName);
+    std::ostringstream out;
+    out << "module: " << moduleName << "\n";
+
+    if (module.path.empty()) {
+        out << "loaded: NO\n";
+        return out.str();
+    }
+
+    const ElfW(Sym)* symtab = nullptr;
+    const char* strtab = nullptr;
+    size_t count = 0;
+    if (!getDynamicInfo(module, &symtab, &strtab, &count)) {
+        out << "dynsym: UNAVAILABLE\n";
+        return out.str();
+    }
+
+    out << "loaded: YES\n";
+    out << "base: 0x" << std::hex << module.base << std::dec << "\n";
+    out << "[Java_com_* JNI exports]\n";
+
+    size_t found = 0;
+    for (size_t i = 0; i < count; ++i) {
+        const ElfW(Sym)& sym = symtab[i];
+        const unsigned type = static_cast<unsigned>(sym.st_info & 0x0f);
+        if (type != STT_FUNC && type != STT_GNU_IFUNC) continue;
+        if (sym.st_name == 0) continue;
+
+        const char* name = strtab + sym.st_name;
+        if (!name || strncmp(name, "Java_", 5) != 0) continue;
+
+        uintptr_t runtime = 0;
+        void* handle = dlopen(module.path.c_str(), RTLD_NOW | RTLD_NOLOAD);
+        if (handle) {
+            runtime = reinterpret_cast<uintptr_t>(dlsym(handle, name));
+            dlclose(handle);
+        }
+        if (!runtime && sym.st_shndx != SHN_UNDEF && sym.st_value != 0)
+            runtime = module.base + static_cast<uintptr_t>(sym.st_value);
+
+        out << name
+            << " | value=0x" << std::hex << static_cast<uintptr_t>(sym.st_value)
+            << " | runtime=0x" << runtime
+            << std::dec << "\n";
+        ++found;
+    }
+
+    if (!found) out << "NONE\n";
+    else out << "count: " << found << "\n";
     return out.str();
 }
 
@@ -369,9 +431,13 @@ Java_com_erfansst3_xposedbridgeexample_MainActivity_nativeDiagnostics(
 
     out << "\n[libstub.so API]\n";
     out << moduleSymbols("libstub.so");
+    out << "\n[libstub.so JNI EXPORTS]\n";
+    out << jniExports("libstub.so");
 
     out << "\n[libgspace_64.so API]\n";
     out << moduleSymbols("libgspace_64.so");
+    out << "\n[libgspace_64.so JNI EXPORTS]\n";
+    out << jniExports("libgspace_64.so");
 
     const pid_t ppid = parentPid();
     out << "\n[Process]\n";
