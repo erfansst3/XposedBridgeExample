@@ -18,7 +18,7 @@ public class XposedEntry implements IXposedHookLoadPackage{
         XposedHelpers.findAndHookMethod(p.packageName+".MainActivity",p.classLoader,"onCreate",Bundle.class,new XC_MethodHook(){
             protected void beforeHookedMethod(MethodHookParam param){
                 try{XposedHelpers.callStaticMethod(param.thisObject.getClass(),"markHooked");}catch(Throwable ignored){}
-                try{MainActivity.xposedVersion=XposedBridge.getXposedVersion();}catch(Throwable ignored){}
+                try{XposedHelpers.callStaticMethod(param.thisObject.getClass(),"setVersion",XposedBridge.getXposedVersion());}catch(Throwable ignored){}
                 XposedBridge.log("XposedBridgeExample: hook SUCCESS");
             }
         });
