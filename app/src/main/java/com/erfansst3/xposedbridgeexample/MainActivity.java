@@ -160,6 +160,13 @@ public class MainActivity extends Activity {
         resultView.setTextSize(13);
         resultView.setTextIsSelectable(true);
 
+        Button inspect = new Button(this);
+        inspect.setText("RUN SANDHOOK INSPECTOR");
+        inspect.setOnClickListener(view -> resultView.setText(GSpaceBridge.inspectSandHook()));
+        root.addView(inspect, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
         Button test = new Button(this);
         test.setText("RUN LIVE SANDHOOK TEST");
         test.setOnClickListener(view -> resultView.setText(runSandHookTest()));
