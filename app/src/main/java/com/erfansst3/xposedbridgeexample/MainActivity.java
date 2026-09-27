@@ -62,7 +62,7 @@ public class MainActivity extends Activity {
         }
 
         TextView v = new TextView(this);
-        v.setTextSize(14);
+        v.setTextSize(12);
         v.setText(s.toString());
         setContentView(v);
     }
