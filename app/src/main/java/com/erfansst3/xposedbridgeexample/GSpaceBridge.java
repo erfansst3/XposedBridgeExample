@@ -22,6 +22,8 @@ public final class GSpaceBridge {
 
     public static native boolean nativeCanGetObject();
 
+    public static native String nativeInspectSandHook();
+
     public static native int nativeHookMethod(
             Method origin,
             Method hook,
@@ -46,6 +48,10 @@ public final class GSpaceBridge {
 
     public static boolean canGetObject() {
         return nativeCanGetObject();
+    }
+
+    public static String inspectSandHook() {
+        return nativeInspectSandHook();
     }
 
     /**
