@@ -1,11 +1,13 @@
 package com.erfansst3.xposedbridgeexample;
 
-import android.os.Build;
-
 import java.lang.reflect.Method;
 
 /**
  * Native API bridge for the SandHook runtime bundled inside GSpace.
+ *
+ * Important: this bridge intentionally does NOT initialize SandHook.
+ * GSpace may already have initialized its native runtime, and calling
+ * initNative() again from a guest/test class-loader is unsafe.
  */
 public final class GSpaceBridge {
     static {
@@ -19,8 +21,6 @@ public final class GSpaceBridge {
     public static native long nativeResolve(String libraryName, String symbolName);
 
     public static native boolean nativeCanGetObject();
-
-    public static native boolean nativeInitSandHook(int sdkInt, boolean debug);
 
     public static native int nativeHookMethod(
             Method origin,
@@ -42,10 +42,6 @@ public final class GSpaceBridge {
 
     public static long resolveGSpace(String symbolName) {
         return nativeResolve("libgspace_64.so", symbolName);
-    }
-
-    public static boolean initializeSandHook() {
-        return nativeInitSandHook(Build.VERSION.SDK_INT, false);
     }
 
     public static boolean canGetObject() {
