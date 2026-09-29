@@ -51,44 +51,6 @@ public class MainActivity extends Activity {
 
     private static native String nativeDiagnostics();
 
-    private String runJavaSandHookClassInspector() {
-        StringBuilder out = new StringBuilder();
-        out.append("=== JAVA SANDHOOK CLASSLOADER INSPECTOR ===\\n");
-
-        ClassLoader app = getClassLoader();
-        ClassLoader ctx = getApplicationContext().getClassLoader();
-        ClassLoader tc = Thread.currentThread().getContextClassLoader();
-        ClassLoader sys = ClassLoader.getSystemClassLoader();
-
-        ClassLoader[] loaders = {app, ctx, tc, sys, null};
-        String[] labels = {"Activity", "Application", "ThreadContext", "System", "Default"};
-
-        for (int i = 0; i < loaders.length; i++) {
-            try {
-                ClassLoader loader = loaders[i];
-                Class<?> c;
-                if (loader != null) {
-                    c = Class.forName("com.swift.sandhook.SandHook", false, loader);
-                } else {
-                    c = Class.forName("com.swift.sandhook.SandHook");
-                }
-
-                out.append(labels[i]).append(": FOUND");
-                out.append(" classLoader=").append(String.valueOf(c.getClassLoader()));
-                out.append(" methods=").append(c.getDeclaredMethods().length);
-                out.append(" fields=").append(c.getDeclaredFields().length);
-                out.append("\\n");
-            } catch (Throwable t) {
-                out.append(labels[i]).append(": NOT FOUND (")
-                        .append(t.getClass().getSimpleName())
-                        .append(": ").append(String.valueOf(t.getMessage()))
-                        .append(")\\n");
-            }
-        }
-
-        return out.toString();
-    }
-
     private String runSandHookTest() {
         StringBuilder out = new StringBuilder();
         out.append("=== EXISTING GSPACE SANDHOOK STATE ===\n");
@@ -199,17 +161,9 @@ public class MainActivity extends Activity {
         resultView.setTextIsSelectable(true);
 
         Button inspect = new Button(this);
-        inspect.setText("RUN SANDHOOK DEEP INSPECTOR");
-        inspect.setOnClickListener(view -> resultView.setText(
-                GSpaceBridge.deepInspectSandHook() + "\n\n" + runJavaSandHookClassInspector()));
+        inspect.setText("RUN SANDHOOK INSPECTOR");
+        inspect.setOnClickListener(view -> resultView.setText(GSpaceBridge.inspectSandHook()));
         root.addView(inspect, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
-
-        Button trace = new Button(this);
-        trace.setText("RUN LOADER TRACE");
-        trace.setOnClickListener(view -> resultView.setText(GSpaceBridge.traceLoader()));
-        root.addView(trace, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
