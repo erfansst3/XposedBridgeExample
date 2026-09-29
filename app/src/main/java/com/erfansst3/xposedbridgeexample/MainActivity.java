@@ -206,6 +206,13 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
+        Button trace = new Button(this);
+        trace.setText("RUN LOADER TRACE");
+        trace.setOnClickListener(view -> resultView.setText(GSpaceBridge.traceLoader()));
+        root.addView(trace, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
         Button test = new Button(this);
         test.setText("RUN LIVE SANDHOOK TEST");
         test.setOnClickListener(view -> resultView.setText(runSandHookTest()));
