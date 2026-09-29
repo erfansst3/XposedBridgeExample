@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <atomic>
+#include <android/log.h>
 
 static std::string lowerCopy(const std::string& s) {
     std::string x = s;
@@ -374,6 +376,12 @@ static std::string jniExports(const std::string& moduleName) {
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_erfansst3_xposedbridgeexample_GSpaceBridge_nativeTraceLoader(JNIEnv* env,jclass){
+    installLoaderTrace();
+    return env->NewStringUTF(loaderTraceReport().c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_erfansst3_xposedbridgeexample_MainActivity_nativeDiagnostics(
         JNIEnv* env, jclass) {
     std::ostringstream out;
@@ -467,6 +475,82 @@ using SandHookHookMethodFn = jint (*)(JNIEnv*, jclass, jobject, jobject, jobject
 struct SandHookSymbolProbe {
     const char* name;
 };
+
+
+using MSHookFunctionFn=void(*)(void*,void*,void**);
+using DlopenCIFn=void*(*)(const char*,int);
+using DoDlopenCIVFn=void*(*)(const char*,int,const void*);
+static MSHookFunctionFn traceHook=nullptr;
+static DlopenCIFn origDlopenCI=nullptr;
+static DoDlopenCIVFn origDoDlopenCIV=nullptr;
+static std::atomic<int> traceHooks{0},traceHits{0},traceGspaceHits{0};
+
+static void traceLog(const char* tag,const char* name,void* ret){
+    ++traceHits;
+    if(name&&strstr(name,"gspace"))++traceGspaceHits;
+    __android_log_print(ANDROID_LOG_INFO,"XposedNativeTrace","%s name=%s ret=%p",tag,name?name:"<null>",ret);
+}
+
+static void* new_dlopen_CI(const char* name,int flags){
+    static thread_local bool busy;
+    if(busy)return origDlopenCI?origDlopenCI(name,flags):nullptr;
+    busy=true;
+    void* r=origDlopenCI?origDlopenCI(name,flags):nullptr;
+    traceLog("dlopen_CI",name,r);
+    busy=false;
+    return r;
+}
+
+static void* new_do_dlopen_CIV(const char* name,int flags,const void* extinfo){
+    static thread_local bool busy;
+    if(busy)return origDoDlopenCIV?origDoDlopenCIV(name,flags,extinfo):nullptr;
+    busy=true;
+    void* r=origDoDlopenCIV?origDoDlopenCIV(name,flags,extinfo):nullptr;
+    traceLog("do_dlopen_CIV",name,r);
+    busy=false;
+    return r;
+}
+
+static bool installLoaderTrace(){
+    if(!traceHook){
+        uintptr_t a=resolveSymbolAny("libgspace_64.so","MSHookFunction");
+        if(!a)return false;
+        traceHook=reinterpret_cast<MSHookFunctionFn>(a);
+    }
+    int before=traceHooks.load();
+    if(!origDlopenCI){
+        uintptr_t a=resolveSymbolAny("linker64","__dl_dlopen");
+        if(!a)a=resolveSymbolAny("linker64","__dl___loader_dlopen");
+        if(a){
+            traceHook((void*)a,(void*)new_dlopen_CI,(void**)&origDlopenCI);
+            if(origDlopenCI)++traceHooks;
+        }
+    }
+    if(!origDoDlopenCIV){
+        const char* syms[]={"__dl__Z9do_dlopenPKciPK17android_dlextinfo","__dl__Z8__dlopenPKciPKv","__dl__Z20__android_dlopen_extPKciPK17android_dlextinfoPKv"};
+        for(const char* s:syms){
+            uintptr_t a=resolveSymbolAny("linker64",s);
+            if(!a)continue;
+            traceHook((void*)a,(void*)new_do_dlopen_CIV,(void**)&origDoDlopenCIV);
+            if(origDoDlopenCIV){++traceHooks;break;}
+        }
+    }
+    return traceHooks.load()>before;
+}
+
+static std::string loaderTraceReport(){
+    std::ostringstream out;
+    out<<"TRACE_LOADER="<<(traceHooks.load()?"ACTIVE":"INACTIVE")<<"\n";
+    out<<"MSHookFunction="<<(traceHook?"YES":"NO")<<"\n";
+    out<<"new_nativeLoad=NOT_FOUND\n";
+    out<<"new_dlopen_CI="<<(origDlopenCI?"HOOKED":"NOT_FOUND")<<"\n";
+    out<<"new_do_dlopen_CIV="<<(origDoDlopenCIV?"HOOKED":"NOT_FOUND")<<"\n";
+    out<<"onSoLoaded="<<(resolveSymbolAny("libgspace_64.so","onSoLoaded")?"FOUND":"NOT_FOUND")<<"\n";
+    out<<"HOOK_COUNT="<<traceHooks.load()<<"\n";
+    out<<"TRACE_HITS="<<traceHits.load()<<"\n";
+    out<<"GSPACE_HITS="<<traceGspaceHits.load()<<"\n";
+    return out.str();
+}
 
 static uintptr_t resolveArtSymbol(const char* name) {
     return resolveSymbolAny("libart.so", name);
